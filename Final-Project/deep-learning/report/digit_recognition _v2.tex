@@ -1,0 +1,655 @@
+\documentclass[10pt]{article}
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{cite}
+\usepackage{color} 
+\usepackage{hyperref}
+
+\topmargin 0.0cm
+\oddsidemargin 0.5cm
+\evensidemargin 0.5cm
+\textwidth 16cm 
+\textheight 21cm
+
+\usepackage[labelfont=bf,labelsep=period,justification=raggedright]{caption}
+
+
+\begin{document}
+\title{Deep Learning: Sequence digit recognition}
+
+
+\author{Ruggero Vasile}
+
+\maketitle
+\begin{abstract}
+I present here a report on the deep learning capstone project of the Udacity Machine Learning Engineering program. This project focuses on the problem of single-digit and multi-digit recognition in real and handcrafted images. I focus on two different datasets: the well-known MNIST dataset and the SVHN (Street View house numbers) dataset, made of real camera pictures capturing house numbers all over the world, in different illumination conditions and from different angles. For both these datasets I will explore single-digit recognition and multi-digit one, attempting at building, training and testing accurate machine learning classifiers.
+\end{abstract}
+
+
+\section{Introduction}
+
+Digit recognition, and, more in general, hand writing recognition is considered a fundamental challenge in the field of machine learning. Apart from natural theoretical and academic interests, various practical applications, now and in the future, rely on the advancements in this kind of technology. For instance we can mention the recognition of old, historically degraded, documents, or, in the service sector, like banking or post, accurate recognition would help to speed up bank-Check processing or postal address interpretation, reducing the need for tedious and slower human operators work. 
+
+While deep learning based techniques are nowadays the state of the art for such problems, in the past, due to the limitations of computational power, especially GPU resources, other methods have been used. However, the performance of such methodologies, even for simple datasets like MNIST, were not comparable with benchmarks given by human operators performances. Deep learning and more refined techniques, together with appropriate preprocessing and postprocessing methods, allow, nowadays, to perform as good as, and in some cases better than, human operators, making this new technology both appealing and demanded.
+
+In this project I will employ the state of the art deep learning technology: convolutional neural networks. I will report on applications of digit recognition for different datasets of different complexity, attempting at obtaining results comparable with those present in the literature. The project is organized as follows. In Sec. \ref{Sec_Datasets} I introduce all the datasets used in the project, analysing their properties and also the preprocessing protocols used to put them in a format ready for machine learning. In Sec. \ref{Sec_Metric} I present the evaluation metric used to assess the performance of the algorithms. In Sec. \ref{Sec_ConvNets} I spend few words on convolutional neural networks and, specifically on the kind of architectures used in this project. In Sec. \ref{Sec_Results} I list and discuss all the results of the project and their comparisons with typical benchmarks found in the literature. Finally I write concluding remarks summarizing the project and discussing over the challenges that this project brought during its development.
+
+A final appendix contains information and details on the source code used to produce the results. 
+
+\subsection{Submission files}
+
+The submission consists of a report file, \emph{digit\_recognition.pdf}, three python files with the relevant class objects, \emph{MNIST\_data.py}, \emph{SVHN\_data.py} and \emph{recognition.py}, and four notebooks containing some of the results, \emph{MNIST\_single\_digit.ipynb}, \emph{MNIST\_Multi.ipynb}, \emph{SVHN\_single\_digit.ipynb} and \emph{SVHN\_Multi.ipynb}. Description of the classes functionalities are found in the appendix to this report.
+
+\section{Datasets}\label{Sec_Datasets}
+
+There are two kind of datasets used in the project: the MNIST dataset and the SVHN dataset. In the following sections I will introduce both and describe their characteristics in detail.
+
+\subsection{The original MNIST dataset}\label{Sec_MNIST_Original}
+
+The MNIST dataset (\url{http://yann.lecun.com/exdb/mnist/}) is a set of handwritten digit images commonly employed to benchmark image processing systems. It contains $60,000$ images used for training and $10,000$ for testing downloaded through the correspondent tensorflow API. All the images have a one color, greyscale, channel, and $28\times 28$ pixel resolution (see Fig. \ref{MNISTimages} for some examples of digits taken from the dataset).
+\begin{figure}[htbp]
+\begin{center}
+\includegraphics[width=0.32\columnwidth]{figs/MNIST1.png} 
+\includegraphics[width=0.32\columnwidth]{figs/MNIST2.png} 
+\includegraphics[width=0.32\columnwidth]{figs/MNIST3.png} 
+\end{center} 
+\caption{\it Examples of original images from MNIST dataset.}
+\label{MNISTimages}
+\end{figure}
+In Fig. \ref{MNIST_Digit_Statistics} I show the balance of the different ten digits in the training, validation and test MNIST datasets. We can see that in all three datasets there is no dominance of one digit over the other. Checking the balance of targets is very important for what regards the choice of evaluation metric used to assess the performance of the machine learning algorithms.
+\begin{figure}[htbp]
+\begin{center}
+\includegraphics[width=0.3\columnwidth]{figs/MNIST_Desc_Train.png} 
+\includegraphics[width=0.3\columnwidth]{figs/MNIST_Desc_Valid.png} 
+\includegraphics[width=0.3\columnwidth]{figs/MNIST_Desc_Test.png} 
+\end{center} 
+\caption{\it From left to right: relative appearance of the different digits in the original training, validation and test MNIST datasets.}
+\label{MNIST_Digit_Statistics}
+\end{figure}
+For single digit datasets like this one, the synthetic dataset of Section \ref{Sec_MNIST_Synthetic_SD} and the single digit SVHN dataset described in Section \ref{Sec_SVHN_SD}, I use the \emph{one-hot} encoding for the target vector, e.g. the target $\hat{y}=(0,0,0,1,0,0,0,0,0,0)$ represents the digit $3$, or the $\hat{y}=(1,0,0,0,0,0,0,0,0,0)$, represents the digit $0$.
+
+There is quite a large collection of literature results on the MNIST dataset (see for instance the MNIST section at \url{http://rodrigob.github.io/are_we_there_yet/build/classification_datasets_results.html}).
+During the years, various learning methods, together with preprocessing techniques, have been used to tackle the problem. For instance, in \cite{MNIST_CNN}, the authors use a committee of convolutional neural networks and achieve the best classification result on the testing set, with an classification error of $0.23\%$. Support vector machines also achieve reasonably good results after deskewing the data instances in \cite{MNIST_SVM} ($0.56\%$ error rate) and boosted stumps in \cite{MNIST_Boosting}  with an $0.87\%$ error rate.
+
+\subsection{The synthetic single digit MNIST dataset}
+\label{Sec_MNIST_Synthetic_SD}
+
+In order to explore the convolutional network technology I create also a synthetic dataset based on the MNIST digits. To build the dataset, I pick MNIST images at random, and, to each of them, I apply a combination of translation and rotation using the \emph{OpenCV} library operations. Rotation angles and space translation shifts are drawn from Gaussian distribution of zero mean and tunable standard deviations (more detailed info can be found in the appendix to the python code, at the end of the report). I show example of instances of the dataset in Fig. \ref{MNISTimages_synthetic}.
+\begin{figure}[htbp]
+\begin{center}
+\includegraphics[width=0.32\columnwidth]{figs/MNIST1_Synthetic.png} 
+\includegraphics[width=0.32\columnwidth]{figs/MNIST2_Synthetic.png} 
+\includegraphics[width=0.32\columnwidth]{figs/MNIST3_Synthetic.png} 
+\end{center} 
+\caption{\it Examples of single digit images from MNIST synthetic dataset.}
+\label{MNISTimages_synthetic}
+\end{figure}
+These dataset happen to be more challenging than the previous when the digits are shifted outside the image dimension or rotated of a large angle. Otherwise, convolutional neural networks should be powerful enough to circumvent the added complexity and to perform equally well on the synthetic data. 
+
+As a concluding remark, before using the dataset for machine learning we had to be sure that the balance of different digits in training, validation and test set is preserved.
+
+\subsection{The synthetic multi-single digit MNIST dataset}
+\label{Sec_MNIST_Synthetic_Multi}
+
+The main aim of this project is to recognise sequence of digits based on the SVHN dataset instances. Before embarking ourselves in such a challenging area, I propose to study the same problem in a synthetically created digit sequence dataset based on MNIST digits. Such dataset is created using the same MNIST class as in the previous section. I fix the maximum sequence length to three, generating instances of the kind shown in Fig. \ref{MNIST_MultiImages},
+\begin{figure}[htbp]
+\begin{center}
+\includegraphics[width=0.3\columnwidth]{figs/MNIST_Multi1.png} 
+\includegraphics[width=0.3\columnwidth]{figs/MNIST_Multi2.png} 
+\includegraphics[width=0.3\columnwidth]{figs/MNIST_Multi3.png} 
+\end{center} 
+\caption{\it Examples of synthetically created digit sequence images from MNIST dataset with a maximum length of $3$.}
+\label{MNIST_MultiImages}
+\end{figure}
+where a variable number of digit lengths are selected from a minimum of one to a maximum of three, and glued in a sequence image of $28$ vertical times $28\times 3$ horizontal pixels with possible blank characters. By construction I impose a balance between 1-digit, 2-digits and 3-digits instances. Each digit can be subjected to local transformations, such as rotations and translations, in the same spirit explained in the previous section, in order to complicate the detection stage and test the architecture. The target vector needs to contain information on all the digits and the blank character. On the contrary to what done in the previous section, I do not use here the one hot encoding, but encode directly the digits into the target. This choice is employed also in the case of the multi-digit SVHN dataset of Section \ref{Sec_SVHN_Multi}. For instance, the target $\hat{y}=(1,5,10)$  in the left panel of Fig. \ref{MNIST_MultiImages}, would represent the number $15$.
+
+\subsection{The single-digit SVHN dataset}
+\label{Sec_SVHN_SD}
+
+The SVHN dataset\cite{SVHN1} contains a large number of Google Street View images from over the world. Using automated algorithms and the Amazon Mechanical Turk machine, single digits can be located and extracted from the Street View images.
+
+From \url{http://ufldl.stanford.edu/housenumbers} two sets of images can be downloaded. The first contains the original, variable resolution, house-number images. Location of the single digits is also provided giving the coordinates of the bounding rectangular boxes in matlab format. The second set is more similar to the MNIST format, since it contains $32\times 32$-pixel cropped digits. In this section I describe this second image set.
+
+The single digit recognition for the SVHN dataset is similar to the MNIST single digit dataset case. However a certain number of complications appear: first, the pictures are in RGB format, so they have three color channels, in comparison with the greyscale case of MNIST. Second, the pictures are real, hence optical effects, such as illumination, blurring and distortions may introduce extra complexity. We can see some examples of cropped digits in their original low resolution color format in Fig. \ref{SVHNimages_original} and notice that apart from the centred digit, other digits are present in the surroundings.
+\begin{figure}[htbp]
+\begin{center}
+\includegraphics[width=0.23\columnwidth]{figs/SVHN_Original1.jpg} 
+\includegraphics[width=0.23\columnwidth]{figs/SVHN_Original2.jpg} 
+\includegraphics[width=0.23\columnwidth]{figs/SVHN_Original3.jpg} 
+\includegraphics[width=0.23\columnwidth]{figs/SVHN_Original4.jpg} 
+\end{center} 
+\caption{\it Examples of original cropped images from the SVHN cropped dataset.}
+\label{SVHNimages_original}
+\end{figure}
+The digits are organized into three different sets: a training set comprising $72257$ instances, a testing set comprising $26032$ instances, and an extra set of $531131$ simpler to learn instances used to complement the training set. To build the training and validation sets from the training and extra datasets, I follow the reference\cite{SVHN_Preprocess1}, where the authors compose the validation set by taking $6000$ images in total, $400$ per class from the training set and $200$ per class from the extra samples. They claim that this choice puts more emphasis on difficult examples. The rest of the extra and training images will compose the training set.
+
+In Fig. \ref{SVHN_Digit_Statistics} I study the balance between classes (digits) in the training, validation and test datasets. We see a slight predominance of digit $1$ and $2$ in the training and testing set, while we have a balance in the validation set due to the way we constructed it. For the rest of the analysis I will assume that such an slight imbalance is not dominant.
+\begin{figure}[htbp]
+\begin{center}
+\includegraphics[width=0.3\columnwidth]{figs/SVHN_Desc_Train.png} 
+\includegraphics[width=0.3\columnwidth]{figs/SVHN_Desc_Valid.png} 
+\includegraphics[width=0.3\columnwidth]{figs/SVHN_Desc_Test.png} 
+\end{center} 
+\caption{\it From left to right: relative appearance of the different digits in the original training, validation and test SVHN dataset.}
+\label{SVHN_Digit_Statistics}
+\end{figure}
+It is usual practice to employ some kind of preprocessing on SVHN data before the learning phase. Here I decided to perform the following two transformation:
+\begin{itemize}
+\item 1) A greyscale transformation on the original RGB images performed by linearly combining the three color channels:
+\begin{equation}
+GREY = 0.2989 * R + 0.5870 * G + 0.1140 * B
+\end{equation}
+Such standard transformation can be found in many references (see for instance \url{https://de.mathworks.com/help/matlab/ref/rgb2gray.html}).
+\item 2) A global contrast normalization \cite{GCN}, according to which, for each image I calculate the intensity mean $\bar{I}$ and standard deviation $\sigma_I$, and transform each image pixel according to
+\begin{equation}
+pixel \rightarrow \frac{pixel - \bar{I}}{\sigma_I}
+\end{equation} 
+\end{itemize}
+In Fig. \ref{SVHNimages} I show some examples of preprocessed digits, that are used as input for the machine learning algorithm.
+\begin{figure}[htbp]
+\begin{center}
+\includegraphics[width=0.24\columnwidth]{figs/SVHN1.jpg} 
+\includegraphics[width=0.24\columnwidth]{figs/SVHN2.jpg} 
+\includegraphics[width=0.24\columnwidth]{figs/SVHN3.jpg} 
+\includegraphics[width=0.24\columnwidth]{figs/SVHN4.jpg} 
+\end{center} 
+\caption{\it Examples of preprocessed images from the SVHN cropped dataset.}
+\label{SVHNimages}
+\end{figure}
+
+\subsection{The multi-digit SVHN dataset}
+\label{Sec_SVHN_Multi}
+
+Here I discuss about the multi-digit SVHN dataset. In Fig. \ref{SVHN_Multi_Original} I provide examples of such dataset.
+\begin{figure}[htbp]
+\begin{center}
+\includegraphics[width=0.45\columnwidth]{figs/SVHN_Multi_Original1.png} 
+\includegraphics[width=0.45\columnwidth]{figs/SVHN_Multi_Original2.png} 
+\includegraphics[width=0.45\columnwidth]{figs/SVHN_Multi_Original3.png} 
+\includegraphics[width=0.45\columnwidth]{figs/SVHN_Multi_Original4.png} 
+\end{center} 
+\caption{\it Examples of SVHN original images.}
+\label{SVHN_Multi_Original}
+\end{figure}
+We can notice that, in comparison to the synthetic MNIST dataset, the variety of the examples in much larger, due to different resolutions, illuminations, or even angles. Especially regarding the resolution, since the images are not homogeneous, in order to use them for the same machine learning algorithm, I will preprocess and resize them to a fixed resolution. A first step consists in identifying where the interesting part of the image is, i.e. the digits, and crop it around them. The dataset comes already with information on the location of the digits in the training, testing and extra datasets, and specifically, it is contained in matlab files (digitStruct.mat). These files contain the coordinates of rectangular bounding boxes associated to each digit in the image plus the labels of the digits. The following protocol is applied:
+\begin{itemize}
+\item For each image selected, I extract the bounding boxes coordinates around each digit in the image.
+\item If the image has one single digit, I crop the image using the only bounding box available.
+\item If the image has more than one digit, I build a bigger bounding box that covers all the single boxes and crop the image using this new box coordinates.
+\item The cropped images are then resized to $32\times 32$ pixels. Though resizing may introduce distortions, it is necessary for building homogeneous training, testing and extra sets.
+\end{itemize} 
+Finally, the cropped images are transformed into greyscale images, and global contrast normalization, as explained in the Single Digit SVHN case (Section \ref{Sec_SVHN_SD}), is applied. Examples of preprocessed images are shown in Fig. \ref{SVHN_Multi_Cropped}.
+\begin{figure}[htbp]
+\begin{center}
+\includegraphics[width=0.3\columnwidth]{figs/SVHN_Multi_Cropped1.jpg} 
+\includegraphics[width=0.3\columnwidth]{figs/SVHN_Multi_Cropped2.jpg} 
+\includegraphics[width=0.3\columnwidth]{figs/SVHN_Multi_Cropped3.jpg} 
+\end{center} 
+\caption{\it Examples of preprocessed multi-digit SVHN images.}
+\label{SVHN_Multi_Cropped}
+\end{figure}
+To conclude, I build the training, validation and testing datasets using the same protocol used for the single digit case, i.e. balancing the classes and combining examples from the training and extra datasets to build the final training and validation sets.
+
+In comparison with the multi-digit MNIST dataset of Section \ref{Sec_MNIST_Synthetic_Multi}, here we have an unbalance between different digit length instances (Fig. \ref{SVHN_Digit_Multi_Statistics}),
+\begin{figure}[htbp]
+\begin{center}
+\includegraphics[width=0.3\columnwidth]{figs/SVHN_Desc_Multi_Train.png} 
+\includegraphics[width=0.3\columnwidth]{figs/SVHN_Desc_Multi_Valid.png} 
+\includegraphics[width=0.3\columnwidth]{figs/SVHN_Desc_Multi_Test.png} 
+\end{center} 
+\caption{\it From left to right: relative appearance of the different digits in the original training, validation and test SVHN dataset.}
+\label{SVHN_Digit_Multi_Statistics}
+\end{figure}
+with predominance of sequences of length $2$ and $3$, and almost absence of sequences of length $4$ and $5$ (there are only $122$ examples of length $5$ digits in the training set). This unbalance may bias the classifier to learn better to classify images with low-middle number of digits and commit more errors in the case of longer sequences. 
+
+
+\section{Evaluation metric}\label{Sec_Metric}
+
+To evaluate the performance of a machine learning classifier, a metric function is chosen. For classification purposes, different metric functions are employed in the literature, and each of them has downsides and upsides. In this project the aim is to recognise single digits or identify sequences of digits. In the first case, we are dealing with a $10$-class (multi-class) problem. Specifically, in the original MNIST, synthetic single digit MNIST and single digit SVHN case, we work with balanced or almost balanced learning sets. In such a case accuracy of predictions, i.e. the fraction of correctly classified instances in the validation or test set, is a good measure of performance. This measure will be then employed in this report for the single digit recognition cases. To support this choice, I refer to many literature results for MNIST and SVHN datasets where accuracy is the dominant choice of evaluation metric. This, \emph{single digit accuracy} is defined as:
+\begin{equation}
+SDA = \frac{\sum_{i\in set}f(y_i, \hat{y}_i)}{N_{set}}
+\end{equation}
+where $y_i$ is the actual digit label, $\hat{y}_i$ is the predicted label, the function $f(x,y)$ is equal to one when $x=y$ and to zero when $x\neq y$, and $N_{set}$ is the number of instances in the set used for evaluation.
+
+More discussion is needed in the case of multi-digit evaluations, both SVHN and MNIST cases treated in this report. In such scenarios, the aim of the machine learning algorithm will be to minimize a certain error between the real target value and the predicted value. The loss function chosen here to be a sum of the error made to recognise every single digit in the sequence. It follows that the algorithm will try to make as less as possible single digit recognition errors. On the other hand the aim is full-sequence recognition, therefore we are interest to measure how many sequences are correctly recognised. I will then employ a \emph{sequence accuracy} function:
+\begin{equation}
+SA = \frac{\sum_{i\in set}f(s_i, \hat{s}_i)}{N_{set}}
+\end{equation}
+where now, $s_i$ is the actual $i$-th sequence and $\hat{s}_i)$ is the predicted sequence. It can be proven that $SA \leq SDA$ and they are nonlinearly related. In fact due statistical reasons, it is quite unlikely that two single digit errors appear in the same sequence. When the single digit accuracy is small I expect that the number of wrongly classified sequences approaches the number of wrongly classified digits which is much larger than the number of sequences. On the contrary when the single digit accuracy is high, the sequence accuracy is of the order of the single digit accuracy, and its relation depend on the maximum number of digits allowed in the training set.
+
+
+\section{Convolutional neural networks and architectures}\label{Sec_ConvNets}
+
+Convolutional neural networks are a specialized subset of feedforward neural networks, usually employed to deal with input data having locally organized features, such as images, videos or speeches \cite{Conv_Net1,Conv_Net2}. Exploitation is possible due to the usage of special types of neuron layers, the convolution and the pooling operations. The convolution layer applies a matrix multiplication between the input features and a sparse kernel, i.e. a kernel which selects only locally contiguous features, for instance in a image, only close pixels enter the convolution layer at one time. Moreover some parameters in the layer are shared, i.e. fixed to be equal, this having the advantage of reducing the total number of degrees of freedom of the network and to force the layer to look for the same characteristic in the whole image. 
+
+The pooling layer typically follows the convolution layer, and allows to introduce translational invariance in the output and at the same time it reduces the spatial dimensions of the input. In this work we will use the max-pooling operations.
+
+The purpose of the convolutional-pooling layer structure is to detect complicated, high order features in the image, which could not be addressed in a simple way from the image itself. These stages therefore act as a complex feature detection mechanism, which then are fed into more standard fully connected layers for brute classification. 
+
+Usually, the higher the number of convolution/pooling layers before the fully connected structure, the more higher-order features of the input image can be detected. This number needs to be chosen taking into account the problem at hand. For instance, for the MNIST dataset, two layers are enough to reach accurate enough predictions, while the SVHN dataset requires deeper architectures. At the same time, the training time for deeper architectures increases considerably. 
+\begin{figure}[htbp]
+\begin{center}
+\includegraphics[width=0.95\columnwidth]{figs/CNN_MNIST_SD.jpg} 
+\end{center} 
+\caption{\it Typical convolutional neural network structure for the single digit problems.}
+\label{ConvNet_SD}
+\end{figure}
+
+\subsection{Single digit architecture}
+
+Convolutional network architectures used in the literature have the structure of the one in Fig. \ref{ConvNet_SD}. A sequence of convolutional layers followed by pooling layers anticipates a final sequence of fully connected layers. In the Figure we can see two convolutional/pooling layers, and two fully connected layers. The last fully connected layer has $10$ neurons due to the one-hot encoding algebra chosen. This type of architecture will be used for both MNIST and SVHN single digit problems, upon correctly tuning the hyperparameters of the model.
+
+The set of relevant hyperparameters contains:
+\begin{itemize}
+\item The patch sizes of the convolutional layers
+\item The pooling sizes and stride magnitude of the convolutional and pooling layers
+\item The number of hidden units in the first fully connected layers.
+\end{itemize} 
+A correct methodology to avoid overfitting would require to perform gridsearch protocols and cross-validation, which, for image recognition problems requires time and computational power. Therefore here I follow an alternative road: first I add dropout between the fully connected layers during training, and second I use stochastic gradient descend with batches of small size in respect to the training set size. Moreover I will use information found in the literature to infer values of the relevant hyper parameters and perform only few searches in the hyper-parameter space.
+
+\subsection{Multi-digit architectures}
+\ref{ConvNet_Multi}).
+\begin{figure}[htbp]
+\begin{center}
+\includegraphics[width=0.95\columnwidth]{figs/CNN_MNIST_Multi.jpg} 
+\includegraphics[width=0.95\columnwidth]{figs/CNN_MNIST_Multi2.jpg} 
+\end{center} 
+\caption{\it (Above) Type-$1$ convolutional neural network structure for multi-digit recognition problem. The first fully connected layer is shared by the output neurons. (Below) Type-$2$ architecture, each output neuron employs its own fully connected layer.}
+\label{ConvNet_Multi}
+\end{figure}
+Multi-digit recognition requires adapting the architecture of the convolutional neural network. I use here two types of architectures, namely type-$1$ and type-$2$ (Fig. \ref{ConvNet_Multi}). The main different consists in the fully connected structure: in type-$1$ architectures, the first fully connected layer is shared, while in the type-$2$ each output neuron has its own layer. The second architecture, having more connections to train, requires longer training times. Dropout is independently performed between the first fully connected layer(s) and the output neurons.
+
+\section{Results}\label{Sec_Results}
+
+This sections contains paragraph correspondent to five different problems: two MNIST related recognition, i.e. original MNIST problem and multi-digit recognition with synthetic dataset, and two SVHN problems, the single and multi-digit cases.
+
+\subsection{Original MNIST digit recognition}
+Results of this section are provided in the  \emph{MNIST\_single\_digit.ipynb} jupyter notebook. MNIST digits are easy to recognise in respect to other datasets, and do not require particular attention to the hyperparameter choice, although one needs to take that into account if one wants to achieve results compatible with the best performing results found in the literature, and minimize training time.
+\begin{table}[h!]
+\centering
+\begin{tabular}{|p{2.7cm}||p{10cm}|} 
+ \hline
+ Layer & Hyperparameters  \\ [0.5ex] 
+ \hline\hline
+ Convolution 1 & $5\times 5$ patches, same padding, \emph{depth = 32}, \emph{stride=1}, \emph{relu activation} and \emph{local response normalization}  \\ 
+ Max Pooling 1 & \emph{side=2}, \emph{stride=2}, same padding  \\
+ Convolution 2 & $5\times 5$ patches, \emph{same} padding, \emph{depth = 64}, \emph{stride=1}, \emph{relu activation} and \emph{local response normalization}  \\
+ Max Pooling 2 & \emph{side=2}, \emph{stride=2}, same padding  \\
+ Fully connected 1 & $512$ neurons, \emph{relu activation}, \emph{dropout probability=0.5}  \\
+ Fully connected 2 & $10$ output neurons, \emph{softmax activation}  \\[1ex] 
+ \hline
+\end{tabular}
+\caption{Final hyperparameters values for original MNIST single digit results.}
+\label{table_MNIST_SD}
+\end{table}
+
+In this section we employ the standard neural network architecture of Fig. \ref{ConvNet_SD} with two convolutional/pooling layers. The final choice of hyperparameters is found in table \ref{table_MNIST_SD}.
+
+Choice of these values of the hyperparameters has been based on literature research, input parameters, such as image dimension and presence of overfitting. I have not observed particular improvement in slight change of values of the parameters. Some restrictions can be inferred however: for instance, choosing too small or too big convolution patches would affect ability of the system to recognise local structures of intermediate pixel magnitude. Furthermore large side values for the max pooling operation would result is extreme reduction of the image dimension along the depth of the network. 
+
+The training phase is performed using the tensorflow Adagrad algorithm with minibatches of size $128$. I have chosen Adagrad since it is one the most simple methods with adaptive learning rate provided by tensorflow. Other than Adagrad I have tried the AdaDelta algorithm which should have the advantage to fight the extreme learning rate decay, but in most of the cases has failed to converge. In Fig. \ref{MNIST_SD_Standard} I plot the minibatch and validation accuracies as a function of the number of epochs.
+\begin{figure}[htbp]
+\begin{center}
+\includegraphics[width=0.8\columnwidth]{figs/MNIST_SD_Standard.jpg} 
+\end{center} 
+\caption{\it Training (minibatch) and validation accuracies during the training phase of a single digit recogniser for MNIST dataset.}
+\label{MNIST_SD_Standard}
+\end{figure}
+The training does not show signs of overfitting, mainly due to the large dataset we used. Therefore I tested the model, obtaining a remarkable accuracy value of $99.2\%$ on the testing set.
+
+\subsubsection{Synthetic MNIST single digit recognition}\label{Section_MNIST_SD_Synthetic}
+
+I add here some result based on a single digit MNIST synthetic dataset (refer also to the  \emph{MNIST\_single\_digit.ipynb} jupyter notebook for results of this section). Training times to reach the highest accuracy values are longer, since the dataset is more complex. For hyperparameters value please have a look as well at table \ref{table_MNIST_SD}.
+\begin{figure}[htbp]
+\begin{center}
+\includegraphics[width=0.45\columnwidth]{figs/MNIST_SD_Synthetic_Rotation.jpg} 
+\includegraphics[width=0.45\columnwidth]{figs/MNIST_SD_Synthetic_Translation.jpg}  
+\end{center} 
+\caption{\it (Left) Accuracy on testing set after $1000$ epochs as a function of the rotation operation standard deviation. (Right) Same as a function of the translation operation standard deviation.}
+\label{MNISTRotationTranslation}
+\end{figure}
+In Fig. \ref{MNISTRotationTranslation} I show how accuracy changes for fixed number of iterations, or epochs, as we add complexity into the dataset. In the left panel I sweep the standard deviation for the angle of rotation, while in the right panel I sweep the standard deviation for bidimensional translation of the digits. For small values of these standard deviations, if the number of epochs is incresed, accuracy values close to $99\%$ are recovered. For higher values this does not happen and I argue that more complex network structures would be needed, e.g. deeper convolutional architectures.
+
+\subsection{Synthetic MNIST multi digit recognition}
+
+I step now towards a more complicated task: recognising multiple digits in a images (refer to \emph{MNIST\_Multi.ipynb} jupyter notebook for the results of this section). To detect the sequence of digits I use independent final fully connected layers as suggested in reference \cite{SVHN2}. I studied two different network structures for this problem. The first is a Type-$1$ architecture (Fig. \ref{ConvNet_Multi} above panel). Since the images are now three times bigger, the training time increases considerably.
+\begin{table}[h!]
+\centering
+\begin{tabular}{|p{2.7cm}||p{10cm}|} 
+ \hline
+ Layer & Hyperparameters  \\ [0.5ex] 
+ \hline\hline
+ Convolution 1 & $5\times 5$ patches, same padding, \emph{depth = 32}, \emph{stride=1}, \emph{relu activation} and \emph{local response normalization}  \\ 
+ Max Pooling 1 & \emph{side=2}, \emph{stride=2}, same padding  \\
+ Convolution 2 & $5\times 5$ patches, \emph{same} padding, \emph{depth = 64}, \emph{stride=1}, \emph{relu activation} and \emph{local response normalization}  \\
+ Max Pooling 2 & \emph{side=2}, \emph{stride=2}, same padding  \\
+ Fully connected 1 & $1024$ neurons, \emph{relu activation}, \emph{dropout probability=0.9}  \\
+ Fully connected 2 & $3$ output neurons, \emph{softmax activation}  \\[1ex] 
+ \hline
+\end{tabular}
+\caption{Final hyperparameters values for bi-convolutional type-1 architecture, MNIST  3-digit length results.}
+\label{table_MNIST_MULTI1}
+\end{table}
+I generate a dataset of $50000$ images of maximum digit length of $3$, and divide it into $40000$ images for training, $5000$ for validating and $5000$ for testing. In Fig. \ref{MNIST_Multi}(left and center panels) I show the digit accuracies and sequence accuracies for the minibatches and validation set as a function of the number of epochs.
+\begin{figure}[htbp]
+\begin{center}
+\includegraphics[width=0.31\columnwidth]{figs/MNIST_Multi1.jpg} 
+\includegraphics[width=0.31\columnwidth]{figs/MNIST_Multi2.jpg}
+\includegraphics[width=0.31\columnwidth]{figs/MNIST_Multi3.jpg}
+\end{center} 
+\caption{\it Training (minibatch) and validation accuracy during the training phase of a multi digit recogniser for MNIST dataset. (Left panel) bi-convolutional layer network. (Center panel) Network with three convolutional layers. (Right panel) Network with multiple fully connected layers.}
+\label{MNIST_Multi}
+\end{figure}
+The testing set single-digit accuracy for the biconvolutional case is $97.6\%$ and the sequence accuracy is $93.1\%$. The hyperparameters are reported in table \ref{table_MNIST_MULTI1}.
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{|p{2.7cm}||p{10cm}|} 
+ \hline
+ Layer & Hyperparameters  \\ [0.5ex] 
+ \hline\hline
+ Convolution 1 & $5\times 5$ patches, same padding, \emph{depth = 32}, \emph{stride=1}, \emph{relu activation} and \emph{local response normalization}  \\ 
+ Max Pooling 1 & \emph{side=2}, \emph{stride=2}, same padding  \\
+ Convolution 2 & $5\times 5$ patches, \emph{same} padding, \emph{depth = 64}, \emph{stride=1}, \emph{relu activation} and \emph{local response normalization}  \\
+ Max Pooling 2 & \emph{side=2}, \emph{stride=2}, same padding  \\
+ Convolution 3 & $5\times 5$ patches, \emph{same} padding, \emph{depth = 64}, \emph{stride=1}, \emph{relu activation} and \emph{local response normalization}  \\
+ Fully connected 1 & $1024$ neurons, \emph{relu activation}, \emph{dropout probability=0.9}  \\
+ Fully connected 2 & $3$ output neurons, \emph{softmax activation}  \\[1ex] 
+ \hline
+\end{tabular}
+\caption{Final hyperparameters values for tri-convolutional type-1 architecture, MNIST  3-digit length results.}
+\label{table_MNIST_MULTI2}
+\end{table}
+In order to improve the accuracy, I first try to increase the complexity of the model adding third convolutional layer after the second max pooling layer (hyperparameters in table \ref{table_MNIST_MULTI2}). In this case results are improved (see Fig. \ref{MNIST_Multi} center panel) with a testing set digit accuracy is $97.9\%$ and  sequence accuracy is $94.0\%$. As mentioned in \cite{SVHN2} for the case of the SVHN dataset, increasing the depth of the convolutional network leads to improved accuracy.
+
+For completeness I also run a different architecture, the type-$2$ (Fig. \ref{ConvNet_Multi} lower panel). I keep the number of hidden units in each fully connected layer equal to $1024$ (full hyperparameters set it table \ref{table_MNIST_MULTI3}). As expected training is much slower since the number of connections increases a lot, however the results improve considerably, with a single digit accuracy of  $98.2\%$ and sequence accuracy of $94.8\%$ on the validation set (see Fig. \ref{MNIST_Multi} right panel).
+\begin{table}[h!]
+\centering
+\begin{tabular}{|p{4.3cm}||p{10cm}|} 
+ \hline
+ Layer & Hyperparameters  \\ [0.5ex] 
+ \hline\hline
+ Convolution 1 & $5\times 5$ patches, same padding, \emph{depth = 32}, \emph{stride=1}, \emph{relu activation} and \emph{local response normalization}  \\ 
+ Max Pooling 1 & \emph{side=2}, \emph{stride=2}, same padding  \\
+ Convolution 2 & $5\times 5$ patches, \emph{same} padding, \emph{depth = 64}, \emph{stride=1}, \emph{relu activation} and \emph{local response normalization}  \\
+ Max Pooling 2 & \emph{side=2}, \emph{stride=2}, same padding  \\
+ Convolution 3 & $5\times 5$ patches, \emph{same} padding, \emph{depth = 64}, \emph{stride=1}, \emph{relu activation} and \emph{local response normalization}  \\
+ 3 parallel fully connected 1 & $1024$ neurons, \emph{relu activation}, \emph{dropout probability=0.9}  \\
+ 3 parallel fully connected 2 & $3$ output neurons, \emph{softmax activation}  \\[1ex] 
+ \hline
+\end{tabular}
+\caption{Final hyperparameters values for tri-convolutional type-2 architecture, MNIST  3-digit length results.}
+\label{table_MNIST_MULTI3}
+\end{table}
+Also for the MNIST multi-digit recognition problem slight change of the parameter values do not lead to interesting improvements or deterioration of accuracy. 
+
+\subsection{SVHN single digit recognition}\label{SVHN_SD_Study}
+
+I report now to the single digit recognition problem with the SVHN dataset. Results of this section can be found in the \emph{SVHN\_Single\_digit.ipynb} notebook. The main reference used for benchmark is \cite{SVHN_Preprocess1}, where the author report a single-digit accuracy of $95.1\%$ obtained with their best architecture. Data is preprocessed in a similar way to what is described in Section \ref{Sec_SVHN_SD} while convolutional network structure is a bit different. There are two main differences in respect to our choice: first the usage of \emph{Lp-pooling} subsampling instead of standard max pooling, and second the employment of \emph{multi-stage} features, i.e. inputs of the fully connected layer are not only the outputs of the last pooling layer but also outputs of previous pooling layers. 
+\begin{figure}[htbp]
+\begin{center}
+\includegraphics[width=0.65\columnwidth]{figs/SVHN_SD2.jpg}
+\end{center} 
+\caption{\it Training (minibatch) and validation accuracy during the training phase of a single digit recogniser for SVHN cropped images dataset.}
+\label{SVHN_SD_Standard}
+\end{figure}
+I had the chance to look at different network architectures and experimenting with different values of the hyperparameters. The final configuration with the best classification accuracy has been a two-convolutional layer structure. Deepening the network may help but increases the number of hyperparameters. The algorithm does not seem to be able therefore to find a better solution than the two-layer one. The hyperparameters used for the results are found in table \ref{table_SVHN_SD}.
+\begin{table}[h!]
+\centering
+\begin{tabular}{|p{2.7cm}||p{10cm}|} 
+ \hline
+ Layer & Hyperparameters  \\ [0.5ex] 
+ \hline\hline
+ Convolution 1 & $5\times 5$ patches, same padding, \emph{depth = 32}, \emph{stride=1}, \emph{relu activation} and \emph{local response normalization}  \\ 
+ Max Pooling 1 & \emph{side=2}, \emph{stride=2}, same padding  \\
+ Convolution 2 & $5\times 5$ patches, \emph{same} padding, \emph{depth = 64}, \emph{stride=1}, \emph{relu activation} and \emph{local response normalization}  \\
+ Max Pooling 2 & \emph{side=2}, \emph{stride=2}, same padding  \\
+ Fully connected 1 & $512$ neurons, \emph{relu activation}, \emph{dropout probability=0.5}  \\
+ Fully connected 2 & $10$ output neurons, \emph{softmax activation}  \\[1ex] 
+ \hline
+\end{tabular}
+\caption{Final best hyperparameters values for SVHN single digit results.}
+\label{table_SVHN_SD}
+\end{table}
+
+I show the accuracies during learning in Fig. \ref{SVHN_SD_Standard}, obtained using minibatch learning and dropout. After about $30000$ epochs to reach the validation error reaches already about $94.7\%$ and the model fails to improve afterwards. At the end of the learning we get a remarkable test set accuracy of $95.0\%$, well comparable with benchmarks reported in reported in \cite{SVHN_Preprocess1}.
+
+%I used two network structures: the first is the same as in Fig. \ref{ConvNet_SD}, two convolutional layers and two pooling layers followed by the fully connected layers. The second takes into account also of a third convolutional layer. I show the accuracies during learning in Fig. \ref{SVHN_SD_Standard}, obtained using minibatch learning and dropout. Hyperparameters have the same values of the MNIST single digit case. In the left panel one finds the results obtained using the first convolutional structure. We see that we need about $25000$ epochs to reach a plateau, and we get a test set accuracy of $93.2\%$. In the right panel instead I provide the results of second convolutional network. Now we need about $50000$ epochs for convergence and we get a test set accuracy of $93.1\%$ and a maximum validation set accuracy of $93.8\%$. I tried several times to reinitialize the network and learn, and the best accuracy reached on the test set has been $93.47\%$ which is about one percent less accurate than the best result reported in \cite{SVHN_Preprocess1}, while comparable with other results therein obtained.
+
+In Fig. \ref{SVHN_SD_Errors} I provide examples of wrongly classified images, showing how complicated the task can be in respect to the MNIST single digit case.
+\begin{figure}[htbp]
+\begin{center}
+\includegraphics[width=0.35\columnwidth]{figs/SVHN_SD_Error1.jpg} 
+\includegraphics[width=0.35\columnwidth]{figs/SVHN_SD_Error2.jpg} 
+\end{center} 
+\caption{\it Examples of wrongly classified SVHN single digit images.}
+\label{SVHN_SD_Errors}
+\end{figure}
+
+\subsection{SVHN multidigit recognition}
+
+In this final section I consider the multidigit classification for the SVHN dataset. Results are produced using different network configurations (please refer to \emph{SVHN\_Multi.ipynb} notebook). 
+
+The configurations are the same as in Figs. \ref{ConvNet_Multi}. I will take reference \cite{SVHN1} as a benchmark to evaluate how the algorithm perform. In this work the authors use linear support vector machines as their best model with different hand-crafted features based on cropped $32\times 32$ images. They reach accuracy around $85-90\%$, still well below human performance, estimated around $98\%$.
+\begin{figure}[htbp]
+\begin{center}
+\includegraphics[width=0.45\columnwidth]{figs/SVHN_Multi2.jpg} 
+\includegraphics[width=0.45\columnwidth]{figs/SVHN_Multi3.jpg} 
+\end{center} 
+\caption{\it (Left panel) Minibatch and validation set accuracies as a function of the number of epochs for the SVHN multidigit preprocessed dataset with first type of architecture. (Right panel) Same quantities obtained during training of the second type of architecture.}
+\label{SVHN_Multi}
+\end{figure}
+
+The state of the art technology for the dataset is instead reported in reference \cite{SVHN2}. There the authors perform a different preprocessing of the input images, simply taking the full image, without bothering locating the relevant part containing the digits and resize it to a $128\times 128$ pixels size. They play with the depth of the architecture, reaching up to $11$ total hidden layers, and up to two fully connected layers before the output layer, reporting increasing accuracies as the depth increases. Their best architecture needs to be trained for days in a hardware configuration with several NVIDIA GPUs and reaches an overall accuracy of about $96\%$ on the test set. Since I do not possess such computational power, I present here results obtained with low depth architectures (up to three convolutional layers), using the preprocessed data described in Section \ref{Sec_SVHN_Multi}, i.e. $32\times 32$ cropped greyscale images. 
+\begin{table}[h!]
+\centering
+\begin{tabular}{|p{4.3cm}||p{10cm}|} 
+ \hline
+ Layer & Hyperparameters  \\ [0.5ex] 
+ \hline\hline
+ Convolution 1 & $5\times 5$ patches, same padding, \emph{depth = 32}, \emph{stride=1}, \emph{relu activation} and \emph{local response normalization}  \\ 
+ Max Pooling 1 & \emph{side=2}, \emph{stride=2}, same padding  \\
+ Convolution 2 & $5\times 5$ patches, \emph{same} padding, \emph{depth = 64}, \emph{stride=1}, \emph{relu activation} and \emph{local response normalization}  \\
+ Max Pooling 2 & \emph{side=2}, \emph{stride=2}, same padding  \\
+ Fully connected 1 & $1024$ neurons, \emph{relu activation}, \emph{dropout probability=0.5}  \\
+ Fully connected 2 & $5$ output neurons, \emph{softmax activation}  \\[1ex] 
+ \hline
+\end{tabular}
+\caption{Final hyperparameters values for bi-convolutional type-1 architecture, SVHN multi-digit results.}
+\label{table_SVHN_MULTI1}
+\end{table}
+In Fig. \ref{SVHN_Multi}, left panel, I show the learning curves for the type-$1$ architecture with two convolutional layers (see table \ref{table_SVHN_MULTI1}). I also evaluate the accuracies for the test set reaching a $96.1\%$ for the single digits, and $85.3\%$ for the full sequence accuracy. In the right panel instead I show the results obtained with the type-$2$ architecture and two convolutional layers (see table \ref{table_SVHN_MULTI2}), for which I get only a slight increase in accuracy, with a single digit value of $96.3\%$ and full sequence value $85.7\%$ at the cost of longer training times for the same number of epochs. In Fig. \ref{SVHN_Multi_Errors} I provide some examples of wrongly classified images. Training times are of the order of several hours for about $50000$ epochs with minibatch learning of $128$ instances per batch with Adagrad algorithm.
+\begin{table}[h!]
+\centering
+\begin{tabular}{|p{4.3cm}||p{10cm}|} 
+ \hline
+ Layer & Hyperparameters  \\ [0.5ex] 
+ \hline\hline
+ Convolution 1 & $5\times 5$ patches, same padding, \emph{depth = 32}, \emph{stride=1}, \emph{relu activation} and \emph{local response normalization}  \\ 
+ Max Pooling 1 & \emph{side=2}, \emph{stride=2}, same padding  \\
+ Convolution 2 & $5\times 5$ patches, \emph{same} padding, \emph{depth = 64}, \emph{stride=1}, \emph{relu activation} and \emph{local response normalization}  \\
+ Max Pooling 2 & \emph{side=2}, \emph{stride=2}, same padding  \\
+ Convolution 3 & $5\times 5$ patches, \emph{same} padding, \emph{depth = 64}, \emph{stride=1}, \emph{relu activation} and \emph{local response normalization}  \\
+ Fully connected 1 & $1024$ neurons, \emph{relu activation}, \emph{dropout probability=0.5}  \\
+ Fully connected 2 & $5$ output neurons, \emph{softmax activation}  \\[1ex] 
+ \hline
+\end{tabular}
+\caption{Final hyperparameters values for tri-convolutional type-1 architecture, SVHN multi-digit results.}
+\label{table_SVHN_MULTI2}
+\end{table}
+
+
+
+\begin{figure}[htbp]
+\begin{center}
+\includegraphics[width=0.3\columnwidth]{figs/SVHN_Multi_Error1.jpg} 
+\includegraphics[width=0.3\columnwidth]{figs/SVHN_Multi_Error2.jpg} 
+\includegraphics[width=0.3\columnwidth]{figs/SVHN_Multi_Error3.jpg} 
+\end{center} 
+\caption{\it Examples of wrongly classified SVHN multi digit images.}
+\label{SVHN_Multi_Errors}
+\end{figure}
+\begin{table}[h!]
+\centering
+\begin{tabular}{|p{4.3cm}||p{10cm}|} 
+ \hline
+ Layer & Hyperparameters  \\ [0.5ex] 
+ \hline\hline
+ Convolution 1 & $5\times 5$ patches, same padding, \emph{depth = 32}, \emph{stride=1}, \emph{relu activation} and \emph{local response normalization}  \\ 
+ Max Pooling 1 & \emph{side=2}, \emph{stride=2}, same padding  \\
+ Convolution 2 & $5\times 5$ patches, \emph{same} padding, \emph{depth = 64}, \emph{stride=1}, \emph{relu activation} and \emph{local response normalization}  \\
+ Max Pooling 2 & \emph{side=2}, \emph{stride=2}, same padding  \\
+ Convolution 3 & $5\times 5$ patches, \emph{same} padding, \emph{depth = 64}, \emph{stride=1}, \emph{relu activation} and \emph{local response normalization}  \\
+ 3 parallel fully connected & $1024$ neurons, \emph{relu activation}, \emph{dropout probability=0.5}  \\
+ 3 parallel fully connected 2 & $5$ output neurons, \emph{softmax activation}  \\[1ex] 
+ \hline
+\end{tabular}
+\caption{Final hyperparameters values for tri-convolutional type-2 architecture, SVHN multi-digit results.}
+\label{table_SVHN_MULTI3}
+\end{table}
+Since changing depth of the network does not seem to help in increasing accuracy considerably, we need to move to more complex architectures. A type-$2$ architecture with a third convolutional layer of depth $64$ layer brings substantial improvement (see Fig. \ref{SVHN_Multi2}) with testing digit accuracy of $97.1\%$ and overall sequence accuracy of $88.8\%$. These results are comparable to those obtained in the original article \cite{SVHN1} and I believe can be further improved using deeper networks.
+\begin{figure}[htbp]
+\begin{center}
+\includegraphics[width=0.75\columnwidth]{figs/SVHN_Multi1.jpg} 
+\end{center} 
+\caption{\it Training and validation accuracies for a type two architecture with third convolutional layer. The third layer have patches of $4\times 4$ dimension and depth equal to $64$. The hyperparameters for the rest of the network are the same as in the other examples.}
+\label{SVHN_Multi2}
+\end{figure}
+
+
+
+%\section{Full application for multi digit recognition from real camera images}
+
+%In the previous sections we have been dealing with single and multi digit recognition problems. Our strategy was to preprocess the images and then use the preprocessed images to feed a machine learning algorithm that would learn to recognise new data. Specifically, in the case of the multi-digit SVHN recognition problem, we have been given full images plus information on the location of such images through coordinates of bounding boxes. What if we are not given such boxes? How is our system able to recognise the number in the image? We could think to take a new image, resize it to a $32\times 32$ pixel format, bring it into greyscale, and feed it into the trained algorithm. If we do this, we will probably not reach a good accuracy, since the resolution may be very low and even for human operators, recognition of numbers in the image may be hard. 
+
+%An alternative would be to find a way to localize the digits in any new images, then to crop the image appropriately and follow the protocol of last section.
+
+\section{Conclusions}
+
+In this paper I report on a detailed study of the digit recognition problem using the MNIST and SVHN dataset. For both these cases I provided results for the single digit and multi digit recognition cases, analysing various convolutional network architectures in order to improve classification accuracy. I spend also a great deal of time in preprocessing features, especially for the SVHN dataset, as suggested by many studies found in the literature. Time has been spent in deriving python code for both preprocessing and actual machine learning. In table \ref{table_results} I collect all the relevant results obtained.
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{|p{3.5cm}||p{2cm}|p{2.3cm}|p{2.7cm}|} 
+ \hline
+ Dataset & Accuracy & Benchmark & Literature Best\\ [0.5ex] 
+ \hline\hline
+ MNIST Single-Digit & $99.2\%$ & $> 99\%$ & $99.79\%$ \cite{MNIST_Best} \\ 
+ MNIST 3-Digit & $94.8\%$ & None & None \\
+ SVHN Single-Digit & $95.0\%$ & $\sim 95\%$ \cite{SVHN_Preprocess1} & $98.31\%$ \cite{SVHN_SD_Best} \\
+ SVHN Multi-Digit & $88.8\%$ & $85-90\%$ \cite{SVHN1} & $\sim 96\%$ \cite{SVHN2} \\[1ex] 
+ \hline
+\end{tabular}
+\label{table_results}
+\end{table}
+
+The most problematic part faced has been to tune the models and train the networks due to the large datasets, deep architectures and relative large number of hyperparameters. Learning times are long and, at least due to my hardware capabilities, do not allow to perform a large amount of trials. I needed therefore to adapt to the situation, considering in detail results present in the literature for the choice of the hyperparameters and test robustness only on few specific cases. While it is certainly true that improvements could be obtained using a more sophisticated preprocessing, and implementing more detailed pooling operation in the convolutional network, substantial improvement, especially in the SVHN cases, requires deeper architectures and therefore computational power.
+
+\appendix
+\section*{Appendix: Python code}
+In the next section I briefly describe the code used to obtain the results in this project.
+\subsection*{MNIST data class}
+
+The MNIST data class, contained in \emph{MNIST\_data.py} file, is used to load and preprocess the MNIST dataset. Here a brief description of the member functions:
+\begin{itemize}
+\item The \emph{\_\_init\_\_} function, initializes the data structure and loads the dataset using the tensorflow API. 
+\item The \emph{learning\_sets} function, returns the stardard training, validation and test features and targets.
+\item The \emph{synthetize\_data} returns a synthetic dataset (both features and targets). The dataset is build by randomly choosing single digit from the MNIST dataset and composing them into a sequence of digits. We can choose a minimum number and maximum number of digits $N_{dig}$. Blank back characters are added to the sequence if the number of digits is lower than the maximum number, so that all the elements in the dataset are homogeneous images of $32\times (32\times N_{dig})$ pixel images. Each digit can be subjected to random rotations or translations as explained below.
+\item The function \emph{\_random\_image} returns a sequence of digits, and it is called by the \emph{synthetize\_data} function.
+\item The \emph{\_rotate\_digit} function applies a rotation to a single digit image. The angle of rotation needs to be passed as well and as a scale argument, as required by the \emph{cv2.getRotationMatrix2D} function of the \emph{openCV} package.
+\item The \emph{\_translate\_digit} function applies an X and Y translation to a single digit image. The X and Y shifts needs to be passed as arguments.
+\end{itemize}
+This class is used to generate both single digit and multi-digit datasets used for the results in Section \ref{MNIST_Study} and sections therein.
+
+\subsection*{SVHN data classes}
+
+I produced two classes to manage the SVHN dataset. The first is the \emph{SVHN\_Single\_Digit} class and the second is the \emph{SVHN\_Full} class. Both are found in \emph{SVHN\_data.py} file. 
+
+\subsubsection*{The SVHN single digit class}
+
+This class is used to create and preprocess the dataset used for single digit SVHN image recognition of Sec. \ref{SVHN_SD_Study}.
+
+\begin{itemize}
+\item The \emph{\_\_init\_\_} function, initializes the data structure and calls the \emph{\_load\_data} function to load the dataset.
+\item The \emph{\_load\_data} function loads the training, testing and extra datasets, both features and targets.
+\item The \emph{\_format\_data} functions is used to format the dataset. One can choose to have categorical targets or normal digit targets. 
+\item The \emph{\_generate\_index} function, is a helper function called by the \emph{dataset} function to generate indexes to build the training and validation sets out of the training and extra images.
+\item The \emph{dataset} function creates the datasets. It calls the \emph{\_generate\_index} function first, then it concatenates appropriate samples of data from the extra and training sets. Finally it calls function for transformation to greyscale and for global contrast normalization. It returns the datasets directly, or, upon choosing appropriately the arguments, may dump the data in a pickle file for later usage.
+\item The \emph{\_to\_greyscale} function transform an RGB image into a greyscale image.
+\item The \emph{\_contrast\_normalization} function applies global contrast normalization to an image.
+\end{itemize}
+
+\subsubsection*{The SVHN class for multidigit problem}
+
+This class manages the SVHN dataset for multidigit recognition.
+
+\begin{itemize}
+\item The \emph{\_\_init\_\_} function, initializes the data structure, and the main class variables, given images in the folder passed as argument. It also calls the \emph{\_get\_boxes} function to load the rectangular boxes from the correspondent digitStruct.mat file.
+\item The \emph{\_get\_boxes} function extracts the rectangular boxes and returns a list of dictionaries. Each dictionary contains information about one image, the name of the file, the coordinates of the boxes and the labels associated to the digits.
+
+\item The \emph{\_generate\_data} function returns the associated dataset, features and targets. To do so it loads an image, it looks at the correspondent informations about labels and boxes, crops the image appropriately to box all the digits contained, resizes the image appropriately, and finally applies greyscale and global contrast normalization transformations.
+\end{itemize}
+
+\subsection*{Convolutional Network classes}
+
+The final classes designed are used to perform the digit recognition. At the moment there are two distinct classes, both situated in the \emph{cnn\_recogniser.py} file, the \emph{Recogniser\_Type1} and \emph{Recogniser\_Type1} classes. The first one is used for the type-$1$ architecture, and the second is for the type-$2$ architecture. The classes are essentially the same, but they differ in the \emph{\_model} and \emph{\_initialize\_variables} functions, where the computation and the associated variables are defined. Here a brief description of the member functions:
+\begin{itemize}
+\item The \emph{\_\_init\_\_} function, initializes the class, instantiating the tensorflow graph and the logger. The \emph{structure} argument is here the most important, since it brings information on which kind of network we want to instantiate. At the moment the class allows to setup only the convolutional and pooling layer hyperparameters.
+\item The \emph{\_define\_placeholders} and the \emph{\_initialize\_variables} functions are internally called to define the type of expected data and the variables needed for the computation.
+\item The \emph{\_model} function defines the network model, takes data as input, feed forward it, and returns the output, given the current network state.
+\item The \emph{\_accuracy\_digits} and \emph{\_accuracy\_full} functions calculate the accuracy of the predictions, respectively digit by digit and considering the whole sequence, as explained above.
+\item The \emph{fit} function is the most important callable function. It performs a full network fit. The arguments are the training, validation and test sets, number of epochs, the size of the minibatch, the dropout parameter value, the number of hidden neurons in the fully connected layer. Also a random seed and a path to save the model can be passed. The function performs the fit using either Adagrad or AdaDelta algorithm, and during the optimization prints out training and validation accuracies for logging.
+\item The \emph{score} and \emph{predict} functions are built in the sklearn spirit to calculate the accuracy of the model for a new dataset, and the predictions respectively. The path to the saved model needs to be passed in order to choose the specific network state to be tested. 
+\end{itemize}
+
+I stress the fact that during the development these classes have undergo numerous changes, so their form is not final.
+
+
+\begin{thebibliography}{8}
+\bibitem{MNIST_CNN} 
+D. Cires, U. Meier and J. Schmidhuber, \emph{Multi-column deep neural networks for image classification}, 2012 IEEE Conference on Computer Vision and Pattern Recognition: 3642–3649, (2012) 
+ 
+\bibitem{MNIST_SVM} 
+DeCoste and Scholkopf, MLJ 2002
+ 
+\bibitem{MNIST_Boosting} 
+K. Balázs and R. Busa-Fekete \emph{Boosting products of base classifiers}, Proceedings of the 26th Annual International Conference on Machine Learning: 497–504 (2009).
+
+
+\bibitem{Conv_Net1}
+Y. LeCun, L. Bottou, Y. Bengio, and P. Haffner, \emph{Gradient-Based Learning Applied to Document Recognition}, Proc. of the IEEE, November (1998).
+
+\bibitem{Conv_Net2}
+I. J. Goodfellow, Y. Bengio and A. Courville, \emph{Deep Learning}, Book in preparation for MIT Press (http://www.deeplearningbook.org/) (2016)
+
+\bibitem{SVHN1}
+Y. Netzer, T. Wang, A. Coates, A. Bissacco, B. Wu, A. Y. Ng, \emph{Reading Digits in Natural Images with Unsupervised Feature Learning}, NIPS Workshop on Deep Learning and Unsupervised Feature Learning (2011).
+
+\bibitem{SVHN2}
+I.J. Goodfellow, Y. Bulatov, J. Ibarz, S. Arnoud, V. Shet, \emph{Multi-digit Number Recognition from Street View Imagery using Deep Convolutional Neural Networks}, arXiv:1312.6082.
+
+\bibitem{SVHN_Preprocess1}
+P. Sermanet, S. Chintala and Y. LeCun, \emph{Convolutional Neural Networks Applied to
+House Numbers Digit Classification}, ArXiv 1204.3968v1 (2014).
+
+\bibitem{GCN}
+A. Coates, H. Lee, and A. Y. Ng, \emph{An Analysis of Single-Layer Networks in Unsupervised Feature Learning}, Journal of Machine Learning Research, W\&CP 215-223, (2011).
+
+\bibitem{MNIST_Best}
+L. Wan, M. Zeiler, S. Zhang, Y. LeCun and R. Fergus, \emph{Regularization of Neural Networks using DropConnect}, International Conference on Machine Learning 2013
+
+
+\bibitem{SVHN_SD_Best}
+C.-Y. Lee, P. W. Gallagher and Z. Tu, \emph{Generalizing Pooling Functions in Convolutional Neural Networks: Mixed, Gated, and Tree}, Arxiv:1509.08985 (2015-2016)
+
+\end{thebibliography}
+
+
+
+
+
+
+
+\end{document}

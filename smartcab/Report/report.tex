@@ -1,0 +1,215 @@
+\documentclass[10pt]{article}
+
+
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{cite}
+\usepackage{color} 
+
+\topmargin 0.0cm
+\oddsidemargin 0.5cm
+\evensidemargin 0.5cm
+\textwidth 16cm 
+\textheight 21cm
+
+\usepackage[labelfont=bf,labelsep=period,justification=raggedright]{caption}
+
+
+
+
+
+\begin{document}
+\title{Smart Cab Driving}
+
+
+\section{Introduction}
+
+This document reports on the Reinforced Learning assignment of the Udacity Nanodegree program: \emph{machine learning engineer}. 
+
+\subsection{The system}
+
+The system consists of a grid of points, which describes crossings between real streets on which a certain number of agents move. One of the agents will be our primary agent, a smart cab, which has the need to reach a given destination in the minimum possible time, starting from a given initial point. Initial and final points are changing every time the simulation is restarted. The cab needs to obey standard traffic rules and avoid collisions with the other agents. Correct actions will bring a positive reward, while wrong actions will penalize the agent. The other agents also obey traffic rules, but they are not constrained by destination or time limit. They act as random driving cars moving on the grid. At each crossing there is a traffic light which maintains its state (red or green) for a variable amount of time. According to the state of the traffic light, and to the presence of other vehicles at the same crossing, the primary agent needs to take decisions in order to reach the destination as soon as possible without incurring in accidents or violations. 
+
+\subsection{Traffic rules}
+
+The game is based on the following traffic rules at each crossing:
+\begin{itemize}
+\item  On a green light, a left turn is permitted if there is no oncoming car making a right turn or coming straight through the intersection.
+\item On a red light, a right turn is permitted if no oncoming traffic is approaching from your left through the intersection.
+\end{itemize}
+
+\subsection{Rewards and penalties}
+
+Here is a list of the penalties and rewards values for certain actions:
+\begin{itemize}
+\item Any move that violates traffic rules or causes an accident is penalized by: $-1$ Points
+\item Making a valid move, but failing to follow navigation instructions given by the \emph{next-waypoint} variables, bring: $-0.5$ Points 
+\item Making a valid move and moving in the correct direction provides: $+2$ Points
+\item Making no move: $0$ Points
+\item Reaching destination provides: $+10$ Points
+\end{itemize}
+
+
+\subsection{Python code: class and interactions}
+
+There are different actors in our system. The python code provided needs therefore to separate the roles of these actors, giving them attributes and methods. 
+
+The main actors are the agents, both derived from a base class \emph{Agent}. We recognise two kind of agents, a \emph{DummyAgent} whose instances represent random driving vehicles, and \emph{LearningAgent} which has the role of the primary agent. The agents live in an environment and interact with and through it. The environment is also a class, that contains all possible informations about the actors in the system: the agents and the traffic lights. Moreover its methods are used to evolve the state of the agents and the traffic lights, and as well, calculate the rewards for each agent, depending on the actions performed.
+
+A simulator class is used to evolve the environment and manage the pygame graphical interface.
+
+Finally we mention a planner class, which tells the agent which direction to take in order to reach the destination as fast as possible.
+
+
+\section{Description of agent.py code}
+
+In this section I briefly describe the code I implemented to perform the tasks. The code file is attached to the project submission. The code consists of
+\begin{itemize}
+\item A \emph{State()} class used to describe the state of the system. After initialization, it is possible to \emph{update} the state, and \emph{reset} the state for starting a new simulation. 
+
+\item A \emph{QTable()} class that implements a Q learning table through a dictionary interface. The initialized table is initially empty and the constructor requires values of some fundamental parameters, the learning rate, the exploration coefficient and the discount factor, plus boolean variables to allow decay dynamics, and, in such cases, also the associated decay constants. New state action pairs are created through the \emph{provide-action} function once a new state is visited and the associated values are initialized to zero. It is possible to \emph{update} the table given state transitions, rewards and actions, according to the Q-learning algorithm. Each time we update the table, we invoke a learning rate and exploration rate $\epsilon$ decay, which take care of reducing the values of these parameters as the simulation goes on. We can set up the functions \emph{learn-rate-decay} and \emph{epsilon-decay} to control the decay. Finally the \emph{provide-action} function suggests also the agent which action to take given the current Q-table values and exploration parameter $\epsilon$, in the spirit of \emph{exploration-exploitation} trade-off.
+
+\item The \emph{LearningAgent} class has been modified to account for new variables and methods. Member variables in the class are used to keep track of the system trajectory in state space, rewards and actions, as well as to monitor success and failures. The Qtable is also stored as member variable of the LearningAgent. The \emph{update} methods is used to sense the environment, update the state, choosing actions, evaluating reward and updating the Qtable. 
+\end{itemize}
+
+
+\section{Task 1: Implement a Basic Driving Agent}
+
+In the first task we just need to allow the cab to drive around ignoring the destination and the other vehicles. We will use this occasion to play around with the code and understanding the system better. In Fig. \ref{random_walk} we show the relative time spent by the primary agent in the vertical and horizontal streets for a $N=100$ trials without enforced deadline, and randomly chosen actions at each crossing. Clearly there is no preferred location, due also to the particular topology of the grid, with periodical boundary conditions.
+
+\begin{figure}[htbp]
+\begin{center}
+\includegraphics[width=0.45\columnwidth]{random_walk_histogram_X_visits.pdf} 
+\includegraphics[width=0.45\columnwidth]{random_walk_histogram_Y_visits.pdf} 
+\end{center} 
+\caption{\it Simulation of $N=100$ trials for a random walking agent without enforced deadline. (Left) Relative amount of time spend in each of the vertical streets. (Right) Relative amount of time spent in each of the horizontal streets.}
+\label{random_walk}
+\end{figure}
+In Fig. \ref{random_walk_reached_destination} I show the result of $N=300$ independent runs. The histogram shows the fraction of times the destination is reached.
+
+\begin{figure}[htbp]
+\begin{center}
+\includegraphics[width=0.6\columnwidth]{random_walk_histogram_reached_destination.pdf} 
+\end{center}
+\caption{\it Histogram counting the fraction of times the destination is reached by a random walker agent.} 
+\label{random_walk_reached_destination}
+\end{figure}
+
+
+\section{Task 2: Inform the Driving Agent}
+
+In order to fit the problem into a Markov Decision Process, we need to identify the state of the system. Since the initial location and destinations are randomized each time, we do not include the location as a state variable. What matters in terms of decisions is the situation at the crossing, i.e. the state of the traffic light in respect to the heading of the primary agent and possible oncoming cars (from three possible directions) together with information on what they are doing (turning, nothing or moving forward). It is also important to consider which is the fastest route to the destination, suggested by the planner class instance, and we will include it in the state as well. 
+
+Additionally one could add the deadline as a state variable, in the sense that the cab may prefer to accumulate a penalty if this could bring an higher reward later.
+So the list of possible state variables is:
+
+\begin{itemize}
+\item State of the traffic light. We have two possible states (red or green).
+\item Presence of oncoming cars and their actions. There are three possible directions and from each direction four possible actions. So in total $64 = 4^3$ combinations.
+\item Optimal direction in the absence of traffic rules. We have three possibilities: forward, left or right
+\item Deadline value: an integer between zero and maximum value.
+\end{itemize}
+If we ignore the deadline variable we have a total of $384$ STATES, given by the cartesian product of $2$ states of the traffic lights, $64$ of the traffic, and $3$ of the car next way-point. The addition of the deadline variable greatly extends the state space, since the deadline can take many values. Assuming that deadline has a maximum value of $D$, the number of states thus become $384*D$. As mentioned before, the state is implemented through the \emph{State()} class.
+
+In my opinion, if we discard the deadline variable, we have a good number of states to perform Q-learning for our agent.
+
+\section{Task 3: Implement a Q-Learning Driving Agent}
+
+The parameters of the Q-learning algorithm are:
+\begin{itemize}
+\item The learning rate $\alpha$. We set up here the initial value of the learning rate $\alpha_0$. The decay function of the learning rate is shown in Eq. \ref{Decaylearningrate} and characterized by a decay constant $\lambda_{\alpha}$
+\item The discount factor $\gamma$ which we will keep constant.
+\item The exploration parameter $\epsilon$. The decay function of the exploration parameter is shown in Eq. \ref{Decayexplorationrate} and characterized by a decay constant $\lambda_{\epsilon}$.
+\end{itemize}
+These parameters are fed into the algorithm in the \emph{run()} function, for flexibility. The Q-table implementation assumes that each new state action pair visited is initially assigned a zero value. Therefore at the beginning of the simulation the Q-learning driving agent moves in the grid as if random action were taken. Changes occur once the Q-table is updated and a given state/action pair is visited. The agent will then start to prefer certain actions instead of others.
+
+\subsection{Using deadline in the system state}
+
+If we use a state made of traffic information, way-point information and deadline, the number of states is greatly increased in respect to $384$ calculated without the use of deadline. We expect therefore the learning agent to take more time to learn the policy. We can anyhow show in Fig. 3 the effect of the learning choosing $\alpha_0 = 0.005$, the discount factor $\gamma=0.1$ and initial value of exploration parameter $\epsilon_0 = 0.1$. We allow parameter decay with  $\lambda_{\alpha} = \lambda_{\epsilon} = 0.1$. In the left plot we have an early stage Q-learning, where we choose $N_{trials} = 20$, and perform the simulation $200$ times. The histogram shows the count of success destination reached fraction. In the central figure instead we choose $N_{trials} = 30$. The distribution starts to shift to the right as an indication that agent reaches the destination more often. Finally in the right plot we choose $N_{trials} = 60$ and witness a further increase in the chances of completing the trip successfully.
+\begin{figure}[htbp]
+\begin{center}
+\includegraphics[width=0.31\columnwidth]{Q_learning_early_histogram_reached_destination.pdf} 
+\includegraphics[width=0.31\columnwidth]{Q_learning_intermediate_histogram_reached_destination.pdf}
+\includegraphics[width=0.31\columnwidth]{Q_learning_later_histogram_reached_destination.pdf} 
+\caption{\it Early stage learning (left), intermediate stage learning (center) and later state (right) histograms for $200$ simulations with the deadline variable}
+\end{center} 
+\label{Qlearning_reached_destination}
+\end{figure}
+
+\subsection{Discarding deadline in the system state}
+
+We now consider similar simulations discarding the deadline variable. We will see that the agent is able to learn much faster. We fix to $N=200$ the number of simulations, $\alpha_0 = 0.005$, $\gamma=0.1$ and $\epsilon_0 = 0.1$. Both exploration coefficient and learning rate are allowed to decay with $\lambda_{\alpha} = \lambda_{\epsilon} = 0.1$. Lets look at the results in Fig. 4. In the left plot we have $N_{trials} = 10$ and we see that already, in respect to what we had in Fig. 3, the agent has learned to reach the destination more times. The center plot is made with $N_{trials} = 20$ and the right plot with $N_{trials} = 40$. Comparing these last two figures we see minimal difference, showing that the agent already learned, and difference in results are only due to stochastic fluctuations in the environment.
+
+\begin{figure}[htbp]
+\begin{center}
+\includegraphics[width=0.31\columnwidth]{Q_learning_early_nodeadline_histogram_reached_destination.pdf} 
+\includegraphics[width=0.31\columnwidth]{Q_learning_intermediate_nodeadline_histogram_reached_destination.pdf}
+\includegraphics[width=0.31\columnwidth]{Q_learning_late_nodeadline_histogram_reached_destination.pdf} 
+\caption{\it Early stage learning (left), intermediate stage learning (center) and later state (right) histograms for $200$ simulations, without the deadline variable.}
+\end{center} 
+\label{Qlearningreacheddestinationnodeadline}
+\end{figure}
+
+\section{Task 4: Improve Q-Learning Driving Agent}
+
+In this final section we concentrate in finding the best solution for the parameters of the Q-learning problem. We can play with the learning rate initial value $\alpha_0$, since we fix the decay function to
+\begin{equation}\label{Decaylearningrate}
+\alpha_t = \alpha_0\exp\{-\lambda_{\alpha} t\}
+\end{equation}
+Then we can change the value of the discount coefficient $\gamma$ and the initial value of the exploration parameter $\epsilon_0$, by fixing its decay also to 
+\begin{equation}\label{Decayexplorationrate}
+\epsilon_t = \epsilon_0\exp\{-\lambda_{\epsilon} t\}
+\end{equation}
+
+According to the results of previous sections, we will not use the \emph{deadline} variable in the systems state. To evaluate the performance of the algorithm we need to evaluate the following:
+\begin{itemize}
+\item The number of times the agent is able to reach the destination in time, especially in later trials
+\item The total reward accumulated when the destination is reached, which we want to be positive.
+\end{itemize}
+
+\subsection{Tuning the exploration coefficient $\epsilon$}
+
+Considering the results of previous sections, we believe to be close to an optimal tuning of the parameters. In this section we investigate the value of the initial exploration coefficient $\epsilon_0$ assuming the decay function \eqref{Decayexplorationrate}. In Fig. 5 we explore this situation with parameters values described in the figure caption. We see that an initially high value of the exploration parameter is unfavourable for learning, therefore if decay of the exploration parameter is not allowed, the result is not good (red dashed curve). If we allow slow decay, the behaviour improves in later trials, and a fast decay essentially cannot be differentiated from an initially lower value of $\epsilon_0$. We find however that the results with these values of the parameters are already extremely good, reaching very high percentage of success already in the first stages of the learning process.
+
+\begin{figure}[htbp]
+\begin{center}
+\includegraphics[width=0.6\columnwidth]{EpsilonTuning.pdf} 
+\caption{\it Average over $N=20$ simulations of the fraction of successes over failure as a function of the trial number (sampled every 10 trials). Parameters values: (Red dashed curve) no $\epsilon$ decay and $\epsilon_0 = 0.5$, (Black dashed curve) decay with $\lambda_{\epsilon} = 0.001$ and $\epsilon_0 = 0.5$, (Red curve) fast decay with $\lambda_{\epsilon} = 0.1$ and $\epsilon_0 = 0.5$ (high initial value), (Black curve) fast decay with $\lambda_{\epsilon} = 0.1$ and $\epsilon_0 = 0.1$ (relatively low initial value). Other parameters $\alpha_0 = 0.005$, $\alpha_{\lambda} = 0.1$, $\gamma = 0.1$.}
+\end{center} 
+\label{EpsilonTuning}
+\end{figure}
+
+\begin{figure}[!]
+\begin{center}
+\includegraphics[width=0.4\columnwidth]{RewardBadConfig.pdf} 
+\includegraphics[width=0.4\columnwidth]{RewardGoodConfig.pdf} 
+\caption{\it .}
+\end{center} 
+\label{Reward}
+\end{figure}
+We finally show (Fig. 6) the reward distribution for a bad exploration parameter configuration, and for a good configuration. We see that the distributions differ slightly, as the good configuration brings more reward in average. The main difference stands in the counts, i.e. the good configuration ensure a higher success rate.
+
+We proceed in the following section assuming therefore $\alpha_0 = 0.005$, $\alpha_{\lambda} = 0.1$, $\gamma = 0.1$, $\lambda_{\epsilon} > 0.1$ and $\epsilon_0 = 0.1$.
+
+\subsection{The policy}
+
+\subsubsection{The optimal policy?}
+
+According to the problem I think an optimal policy is the following:
+\begin{itemize}
+\item The agent should follow the indication from the planner.
+\item In case he cannot because of the traffic light or other agents, he should do nothing until the way is free and then proceed according to the planner.
+\end{itemize}
+
+\subsubsection{What policy does the agent learn?}
+
+Observing the sequence of trials and actions in trial, I believe my learning agent is exactly following the policy sketched in the previous section. In fact it does not incur in penalties, and many times prefers to do nothing instead of committing an infraction.
+
+\section{Conclusions}
+To conclude, I believe I reported a successful implementation of a Q-learning agent. I studied the problem starting from random movements, implementing the Q-learning, and tuning the parameter values. I was able to find a good parameter configuration under which my agent performs extremely well and learns the policy fast.
+
+
+
+\end{document}
